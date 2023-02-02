@@ -67,7 +67,7 @@ public class MainActivity extends AppCompatActivity {
                             if (serial[i] != null) {
                                 try {
 
-                                    String inputString = "hello world!\r\n";
+                                    String inputString = "Daniboy!\r\n";
                                     Charset charset = StandardCharsets.UTF_8;
                                     byte[] byteArray = inputString.getBytes(charset);
 
