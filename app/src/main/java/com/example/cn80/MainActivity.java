@@ -1,25 +1,19 @@
 package com.example.cn80;
 
+import android.Manifest;
 import android.os.Bundle;
-import android.os.IBinder;
 import android.os.RemoteException;
-import android.support.design.widget.Snackbar;
+import android.support.design.widget.TextInputEditText;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
 
-import androidx.navigation.NavController;
-import androidx.navigation.Navigation;
-import androidx.navigation.ui.AppBarConfiguration;
-import androidx.navigation.ui.NavigationUI;
-
-import com.example.cn80.databinding.ActivityMainBinding;
-import com.honeywell.osservice.Manifest;
 import com.honeywell.osservice.sdk.SerialManager;
 import com.honeywell.osservice.sdk.SerialPort;
 
-import android.view.Menu;
-import android.view.MenuItem;
+import android.widget.Button;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -29,94 +23,169 @@ import java.nio.charset.StandardCharsets;
 
 public class MainActivity extends AppCompatActivity {
 
-    private AppBarConfiguration appBarConfiguration;
-    private ActivityMainBinding binding;
-
     private SerialManager sm;
     private SerialPort sp;
-
+    private String[] serial;
+    private ByteBuffer buffer;
+    private boolean isSerialConnected = false;
+    private boolean shouldOpenNewThread = true;
+    private TextView readText;
+    private String readFromBuffer;
+    private Button connectButton;
+    private Button closeButton;
+    private Button writeButton;
+    private TextInputEditText inputText;
     public static final String TAG = "TESTE";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        setup();
+    }
 
-        binding = ActivityMainBinding.inflate(getLayoutInflater());
-        setContentView(binding.getRoot());
+    public void connect(View view) {
+        new Manifest.permission();
+        try {
+            sm = SerialManager.getInstance();
+            Log.d(TAG, "getInstance");
+            serial = sm.getSerialPorts();
+            Log.d(TAG, "getSerialPorts");
+            if (serial != null && serial.length > 0) {
 
-        setSupportActionBar(binding.toolbar);
+                for (int i = 0; i < serial.length; i++) {
+                    if (serial[i] != null) {
+                        sp = sm.openSerialPort(serial[i]);
+                        Log.d(TAG, "openSerialPort" + i);
+                        sp.setParameters(57600, 8, 0, 1);
+                        Log.d(TAG, "setParameters");
 
-        NavController navController = Navigation.findNavController(this, R.id.nav_host_fragment_content_main);
-        appBarConfiguration = new AppBarConfiguration.Builder(navController.getGraph()).build();
-        NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration);
-
-        binding.fab.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-               // new Manifest.permission();
-
-                String[] serial;
-                try {
-                    sm = SerialManager.getInstance();
-                    serial = sm.getSerialPorts();
-
-
-                    if (serial != null && serial.length > 0) {
-                        for (int i = 0; i < serial.length; i++) {
-
-                            if (serial[i] != null) {
-                                try {
-
-                                    String inputString = "Daniboy!\r\n";
-                                    Charset charset = StandardCharsets.UTF_8;
-                                    byte[] byteArray = inputString.getBytes(charset);
-
-                                    ByteBuffer buffer = ByteBuffer.wrap(byteArray);
-
-                                    sp = sm.openSerialPort(serial[i]);
-                                    sp.setParameters(57600, 8, 0, 1);
-                                    sp.write(buffer, buffer.array().length);
-
-                                } catch (IOException | RemoteException e) {
-                                    e.printStackTrace();
-                                }
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                onConnect();
                             }
-                        }
+                        });
                     }
-                } catch (Exception e) {
-                    Log.d(TAG, "onClick: " + e);
                 }
             }
-        });
+            isSerialConnected = true;
+            if (shouldOpenNewThread) {
+                MyThread thread = new MyThread();
+                new Thread(thread).start();
+                shouldOpenNewThread = false;
+                Log.d(TAG, "Thread criada");
+            }
+        } catch (IOException | RemoteException e) {
+            e.printStackTrace();
+        }
     }
 
-//    @Override
-//    public boolean onCreateOptionsMenu(Menu menu) {
-//        // Inflate the menu; this adds items to the action bar if it is present.
-//        getMenuInflater().inflate(R.menu.menu_main, menu);
-//        return true;
-//    }
-//
-//    @Override
-//    public boolean onOptionsItemSelected(MenuItem item) {
-//        // Handle action bar item clicks here. The action bar will
-//        // automatically handle clicks on the Home/Up button, so long
-//        // as you specify a parent activity in AndroidManifest.xml.
-//        int id = item.getItemId();
-//
-//        //noinspection SimplifiableIfStatement
-//        if (id == R.id.action_settings) {
-//            return true;
-//        }
-//
-//        return super.onOptionsItemSelected(item);
-//    }
-
-    @Override
-    public boolean onSupportNavigateUp() {
-        NavController navController = Navigation.findNavController(this, R.id.nav_host_fragment_content_main);
-        return NavigationUI.navigateUp(navController, appBarConfiguration)
-                || super.onSupportNavigateUp();
+    public void write(View view) {
+        if (isSerialConnected) {
+            String valor = inputText.getText().toString();
+            if (!valor.isEmpty() || !valor.equals("") || valor.length() > 0) {
+                try {
+                    String inputString = inputText.getText() + "\r\n";
+                    Charset charset = StandardCharsets.UTF_8;
+                    byte[] byteArray = inputString.getBytes(charset);
+                    buffer = ByteBuffer.wrap(byteArray);
+                    sp.write(buffer, buffer.array().length);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                } catch (RemoteException e) {
+                    e.printStackTrace();
+                }
+            } else {
+                Toast.makeText(this, "Digite algo primeiro", Toast.LENGTH_SHORT).show();
+            }
+        } else {
+            Toast.makeText(this, "Serial is not connected", Toast.LENGTH_SHORT).show();
+        }
     }
 
+    public void close(View view) {
+        isSerialConnected = false;
+        try {
+            if (sp != null)
+                sp.close();
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    onClose();
+                }
+            });
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
+    }
+
+    class MyThread implements Runnable {
+        private ByteBuffer readBuffter = ByteBuffer.allocate(1024);
+        private String textConcatenatedBeforeEnter = "";
+
+        @Override
+        public void run() {
+            while (isSerialConnected) {
+                try {
+                    int b = sp.read(readBuffter);
+                    if (b > 0) {
+                        readFromBuffer = new String(readBuffter.array(), StandardCharsets.UTF_8);
+                        readFromBuffer = readFromBuffer.substring(0, b);
+                        Log.d(TAG, "run: " + readFromBuffer);
+                        int asciiValue = readFromBuffer.charAt(b - 1);
+                        if (asciiValue != 13) {
+                            textConcatenatedBeforeEnter = textConcatenatedBeforeEnter + readFromBuffer;
+                        } else {
+                            Log.d(TAG, "keyboard key: " + asciiValue);
+
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    readText.setText(textConcatenatedBeforeEnter);
+                                    textConcatenatedBeforeEnter = "";
+                                    readFromBuffer = "";
+                                }
+                            });
+                        }
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                } catch (RemoteException e) {
+                    e.printStackTrace();
+                }
+            }
+            Log.d(TAG, "thread closed");
+            shouldOpenNewThread = true;
+        }
+    }
+
+    private void setup() {
+        readText = findViewById(R.id.read);
+        connectButton = findViewById(R.id.connect);
+        closeButton = findViewById(R.id.close);
+        writeButton = findViewById(R.id.write);
+        inputText = findViewById(R.id.input);
+    }
+
+    private void onConnect() {
+        connectButton.setVisibility(View.GONE);
+        closeButton.setVisibility(View.VISIBLE);
+        writeButton.setVisibility(View.VISIBLE);
+        readText.setVisibility(View.VISIBLE);
+        inputText.setVisibility(View.VISIBLE);
+    }
+
+    private void onClose() {
+        isSerialConnected = false;
+        connectButton.setVisibility(View.VISIBLE);
+        closeButton.setVisibility(View.GONE);
+        writeButton.setVisibility(View.GONE);
+        readText.setVisibility(View.GONE);
+        inputText.setVisibility(View.GONE);
+        readText.setText("");
+        inputText.setText("");
+    }
 }
