@@ -43,8 +43,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void connect(View view) {
-        new Manifest.permission();
+
         try {
+            new Manifest.permission();
             sm = SerialManager.getInstance();
             Log.d(TAG, "getInstance");
             serial = sm.getSerialPorts();
